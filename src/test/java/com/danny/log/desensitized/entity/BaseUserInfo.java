@@ -15,6 +15,7 @@ import java.util.Date;
  * @Created on 2017-06-07 15:19:23
  */
 public class BaseUserInfo extends BaseEntity{
+
     private UserTypeEnum userType;
 
     private static final long serialVersionUID = -3387516993124229938L;

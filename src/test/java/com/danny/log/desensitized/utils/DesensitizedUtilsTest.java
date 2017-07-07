@@ -4,7 +4,6 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.serializer.SerializerFeature;
 import com.danny.log.desensitized.entity.*;
 import org.junit.Test;
-
 import java.util.Date;
 
 /**
@@ -116,5 +115,6 @@ public class DesensitizedUtilsTest {
     public void testPassword() {
         System.out.println(DesensitizedUtils.password("123456"));
     }
+
 
 }

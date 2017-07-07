@@ -31,15 +31,17 @@ public class DesensitizedUtils {
     public static String getJson(Object javaBean) {
         String json = null;
         if (null != javaBean) {
-            Class<? extends Object> raw = javaBean.getClass();
             try {
-                if (raw.isInterface())
-                    return json;
+                if (javaBean.getClass().isInterface()) return json;
                 /* 克隆出一个实体进行字段修改，避免修改原实体 */
-                Object clone = ObjectCopyUtil.copy(javaBean);
+                Object clone = copy(javaBean);
+                /* 定义一个计数器，用于避免重复循环自定义对象类型的字段 */
                 Set<Integer> referenceCounter = new HashSet<Integer>();
-                DesensitizedUtils.replace(DesensitizedUtils.findAllField(raw), clone, referenceCounter);
+                /* 对克隆实体进行脱敏操作 */
+                DesensitizedUtils.replace(getAllFields(clone), clone, referenceCounter);
+                /* 利用fastjson对脱敏后的克隆对象进行序列化 */
                 json = JSON.toJSONString(clone, SerializerFeature.WriteMapNullValue, SerializerFeature.WriteNullListAsEmpty);
+                /* 清空计数器 */
                 referenceCounter.clear();
                 referenceCounter = null;
             } catch (Throwable e) {
@@ -47,21 +49,6 @@ public class DesensitizedUtils {
             }
         }
         return json;
-    }
-
-    /**
-     * 获取类的所有字段
-     *
-     * @param clazz
-     * @return
-     */
-    private static Field[] findAllField(Class<?> clazz) {
-        Field[] fileds = clazz.getDeclaredFields();
-        while (null != clazz.getSuperclass() && !Object.class.equals(clazz.getSuperclass())) {
-            fileds = (Field[]) ArrayUtils.addAll(fileds, clazz.getSuperclass().getDeclaredFields());
-            clazz = clazz.getSuperclass();
-        }
-        return fileds;
     }
 
     private static void replace(Field[] fields, Object javaBean, Set<Integer> referenceCounter) throws IllegalArgumentException, IllegalAccessException {
@@ -77,14 +64,14 @@ public class DesensitizedUtils {
                             int len = Array.getLength(value);
                             for (int i = 0; i < len; i++) {
                                 Object arrayObject = Array.get(value, i);
-                                DesensitizedUtils.replace(DesensitizedUtils.findAllField(arrayObject.getClass()), arrayObject, referenceCounter);
+                                DesensitizedUtils.replace(getAllFields(arrayObject), arrayObject, referenceCounter);
                             }
                         } else if (value instanceof Collection<?>) {//对集合类型的字段进行递归过滤
                             Collection<?> c = (Collection<?>) value;
                             Iterator<?> it = c.iterator();
                             while (it.hasNext()) {
                                 Object collectionObj = it.next();
-                                DesensitizedUtils.replace(DesensitizedUtils.findAllField(collectionObj.getClass()), collectionObj, referenceCounter);
+                                DesensitizedUtils.replace(getAllFields(collectionObj), collectionObj, referenceCounter);
                             }
                         } else if (value instanceof Map<?, ?>) {//对Map类型的字段进行递归过滤
                             Map<?, ?> m = (Map<?, ?>) value;
@@ -92,7 +79,7 @@ public class DesensitizedUtils {
                             for (Object o : set) {
                                 Map.Entry<?, ?> entry = (Map.Entry<?, ?>) o;
                                 Object mapVal = entry.getValue();
-                                DesensitizedUtils.replace(DesensitizedUtils.findAllField(mapVal.getClass()), mapVal, referenceCounter);
+                                DesensitizedUtils.replace(getAllFields(mapVal), mapVal, referenceCounter);
                             }
                         } else if (value instanceof Enum<?>) {
                             continue;
@@ -104,49 +91,116 @@ public class DesensitizedUtils {
                                 && !StringUtils.startsWith(field.getType().getName(), "javax.")
                                 && !StringUtils.startsWith(field.getName(), "java.")
                                 && referenceCounter.add(value.hashCode())) {
-                            DesensitizedUtils.replace(DesensitizedUtils.findAllField(type), value, referenceCounter);
+                            DesensitizedUtils.replace(getAllFields(value), value, referenceCounter);
                         }
                     }
-                    //处理自身的属性
-                    Desensitized annotation = field.getAnnotation(Desensitized.class);
-                    if (field.getType().equals(String.class) && null != annotation && executeIsEffictiveMethod(javaBean, annotation)) {
-                        String valueStr = (String) value;
-                        if (StringUtils.isNotBlank(valueStr)) {
-                            switch (annotation.type()) {
-                                case CHINESE_NAME: {
-                                    field.set(javaBean, DesensitizedUtils.chineseName(valueStr));
-                                    break;
-                                }
-                                case ID_CARD: {
-                                    field.set(javaBean, DesensitizedUtils.idCardNum(valueStr));
-                                    break;
-                                }
-                                case FIXED_PHONE: {
-                                    field.set(javaBean, DesensitizedUtils.fixedPhone(valueStr));
-                                    break;
-                                }
-                                case MOBILE_PHONE: {
-                                    field.set(javaBean, DesensitizedUtils.mobilePhone(valueStr));
-                                    break;
-                                }
-                                case ADDRESS: {
-                                    field.set(javaBean, DesensitizedUtils.address(valueStr, 8));
-                                    break;
-                                }
-                                case EMAIL: {
-                                    field.set(javaBean, DesensitizedUtils.email(valueStr));
-                                    break;
-                                }
-                                case BANK_CARD: {
-                                    field.set(javaBean, DesensitizedUtils.bankCard(valueStr));
-                                    break;
-                                }
-                                case PASSWORD: {
-                                    field.set(javaBean, DesensitizedUtils.password(valueStr));
-                                    break;
-                                }
-                            }
-                        }
+
+                    //脱敏操作
+                    setNewValueForField(javaBean, field, value);
+
+                }
+            }
+        }
+    }
+
+    /**
+     * 拷贝对象方法
+     *
+     * @throws IllegalAccessException
+     * @throws InstantiationException
+     */
+    public static Object copy(Object objSource) throws InstantiationException, IllegalAccessException {
+
+        if (null == objSource) return null;
+        // 获取源对象类型
+        Class<?> clazz = objSource.getClass();
+        Object objDes = clazz.newInstance();
+        // 获得源对象所有属性
+        Field[] fields = getAllFields(objSource);
+        // 循环遍历字段，获取字段对应的属性值
+        for (Field field : fields) {
+            field.setAccessible(true);
+            // 如果该字段是 static + final 修饰
+            if (field.getModifiers() >= 24) {
+                continue;
+            }
+            try {
+                // 设置字段可见，即可用get方法获取属性值。
+                field.set(objDes, field.get(objSource));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        return objDes;
+    }
+
+    /**
+     * 获取包括父类所有的属性
+     * @param objSource
+     * @return
+     */
+    public static Field[] getAllFields(Object objSource) {
+        /*获得当前类的所有属性(private、protected、public)*/
+        List<Field> fieldList = new ArrayList<Field>();
+        Class tempClass = objSource.getClass();
+        while (tempClass != null && !tempClass.getName().toLowerCase().equals("java.lang.object")) {//当父类为null的时候说明到达了最上层的父类(Object类).
+            fieldList.addAll(Arrays.asList(tempClass.getDeclaredFields()));
+            tempClass = tempClass.getSuperclass(); //得到父类,然后赋给自己
+        }
+        Field[] fields =new Field[fieldList.size()];
+        fieldList.toArray(fields);
+        return fields;
+    }
+
+
+
+    /**
+     * 脱敏操作（按照规则转化需要脱敏的字段并设置新值）
+     * 目前只支持String类型的字段，如需要其他类型如BigDecimal、Date等类型，可以添加
+     *
+     * @param javaBean
+     * @param field
+     * @param value
+     * @throws IllegalAccessException
+     */
+    public static void setNewValueForField(Object javaBean, Field field, Object value) throws IllegalAccessException {
+        //处理自身的属性
+        Desensitized annotation = field.getAnnotation(Desensitized.class);
+        if (field.getType().equals(String.class) && null != annotation && executeIsEffictiveMethod(javaBean, annotation)) {
+            String valueStr = (String) value;
+            if (StringUtils.isNotBlank(valueStr)) {
+                switch (annotation.type()) {
+                    case CHINESE_NAME: {
+                        field.set(javaBean, DesensitizedUtils.chineseName(valueStr));
+                        break;
+                    }
+                    case ID_CARD: {
+                        field.set(javaBean, DesensitizedUtils.idCardNum(valueStr));
+                        break;
+                    }
+                    case FIXED_PHONE: {
+                        field.set(javaBean, DesensitizedUtils.fixedPhone(valueStr));
+                        break;
+                    }
+                    case MOBILE_PHONE: {
+                        field.set(javaBean, DesensitizedUtils.mobilePhone(valueStr));
+                        break;
+                    }
+                    case ADDRESS: {
+                        field.set(javaBean, DesensitizedUtils.address(valueStr, 8));
+                        break;
+                    }
+                    case EMAIL: {
+                        field.set(javaBean, DesensitizedUtils.email(valueStr));
+                        break;
+                    }
+                    case BANK_CARD: {
+                        field.set(javaBean, DesensitizedUtils.bankCard(valueStr));
+                        break;
+                    }
+                    case PASSWORD: {
+                        field.set(javaBean, DesensitizedUtils.password(valueStr));
+                        break;
                     }
                 }
             }
@@ -181,11 +235,11 @@ public class DesensitizedUtils {
         return isAnnotationEffictive;
     }
 
-    public static boolean isNotEmpty(String str) {
+    private static boolean isNotEmpty(String str) {
         return str != null && !"".equals(str);
     }
 
-    public static boolean isEmpty(String str) {
+    private static boolean isEmpty(String str) {
         return !isNotEmpty(str);
     }
 
