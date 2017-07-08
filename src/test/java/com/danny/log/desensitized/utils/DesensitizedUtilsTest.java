@@ -52,6 +52,7 @@ public class DesensitizedUtilsTest {
         System.out.println("脱敏后：" + DesensitizedUtils.getJson(userPackage));
     }
 
+
     /**
      * 中文姓名脱敏测试：李先生 → 李**
      */
