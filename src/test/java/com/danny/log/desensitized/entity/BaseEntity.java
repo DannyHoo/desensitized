@@ -1,5 +1,6 @@
 package com.danny.log.desensitized.entity;
 
+import java.io.Serializable;
 import java.util.Date;
 
 /**
@@ -10,7 +11,7 @@ import java.util.Date;
  * @Company: lxjr.com
  * @Created on 2017-07-06 13:38:13
  */
-public class BaseEntity {
+public class BaseEntity /*implements Serializable*/{
     private static final long serialVersionUID = -3387516993124229938L;
 
     private Long id;

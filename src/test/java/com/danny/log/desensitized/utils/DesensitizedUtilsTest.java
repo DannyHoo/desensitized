@@ -1,10 +1,18 @@
 package com.danny.log.desensitized.utils;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.serializer.SerializerFeature;
+import com.danny.log.desensitized.DeepCloneUtil;
 import com.danny.log.desensitized.entity.*;
 import org.junit.Test;
-import java.util.Date;
+
+import org.apache.commons.beanutils.PropertyUtils;
+import org.apache.commons.beanutils.BeanUtils;
+import net.sf.cglib.beans.BeanCopier;
+
+import java.lang.reflect.InvocationTargetException;
+import java.util.*;
 
 /**
  * @author huyuyang@lxfintech.com
@@ -13,6 +21,7 @@ import java.util.Date;
  * @Description:
  * @Company: lxjr.com
  * @Created on 2017-07-04 22:40:57
+ * 待完善日志脱敏问题 bg项目查询菜单时报错 由org.springframework.validation.support.BindingAwareModelMap引起
  */
 public class DesensitizedUtilsTest {
 
@@ -23,7 +32,26 @@ public class DesensitizedUtilsTest {
      * @throws InstantiationException
      */
     @Test
-    public void testUserInfo() throws IllegalAccessException, InstantiationException {
+    public void testUserInfo() throws IllegalAccessException, InstantiationException, InvocationTargetException, NoSuchMethodException {
+
+        Integer i1=1222;
+        Integer i2=1222;
+        boolean e=i1.equals(i2);
+
+        List<String> stringList = new ArrayList<String>();
+        stringList.add("danny");
+        stringList.add("hoo");
+        stringList.add("song");
+        Map<String,UserTypeEnum> map=new HashMap<String, UserTypeEnum>();
+        map.put("dannymap",UserTypeEnum.ADMINISTRATOR);
+
+        Map<String,UserTypeEnum> map1=new HashMap<String, UserTypeEnum>();
+        map.put("dannymap",UserTypeEnum.ADMINISTRATOR);
+        Map<String,UserTypeEnum> map2=new HashMap<String, UserTypeEnum>();
+        map.put("dannymap",UserTypeEnum.ADMINISTRATOR);
+        List<Map> mapList= new ArrayList<>();
+        mapList.add(map1);
+        mapList.add(map2);
 
         /*单个实体*/
         BaseUserInfo baseUserInfo = new BaseUserInfo()
@@ -35,7 +63,11 @@ public class DesensitizedUtilsTest {
                 .setBankCardNo("6227000212090659057")
                 .setEmail("hudanni6688@126.com")
                 .setUserType(UserTypeEnum.ADMINISTRATOR)
-                .setUserService(new UserServiceImpl());
+                .setUserService(new UserServiceImpl())
+                .setStrList(stringList)
+                .setMap(map)
+                .setiLimitKey(LimitFrequencyKeyEnum.SMSCODE_MOBILE_DAY_LIMIT)
+                .setMapList(mapList);
 
         /*父类属性*/
         baseUserInfo.setId(101202L)
@@ -45,11 +77,15 @@ public class DesensitizedUtilsTest {
         /*嵌套实体*/
         UserPackage userPackage = new UserPackage()
                 .setFlag(true)
-                .setBaseUserInfo(baseUserInfo);
+                .setBaseUserInfo(baseUserInfo)
+                .setUserPackageName("UserPackageName_Danny");
 
-        System.out.println("脱敏前：" + JSON.toJSONString(baseUserInfo, SerializerFeature.WriteMapNullValue, SerializerFeature.WriteNullListAsEmpty));
+
+        //System.out.println("脱敏前：" + JSON.toJSONString(baseUserInfo, SerializerFeature.WriteMapNullValue, SerializerFeature.WriteNullListAsEmpty));
         System.out.println("脱敏后：" + DesensitizedUtils.getJson(baseUserInfo));
         System.out.println("脱敏后：" + DesensitizedUtils.getJson(userPackage));
+        System.out.println("原对象：" + JSON.toJSONString(baseUserInfo));
+
     }
 
 

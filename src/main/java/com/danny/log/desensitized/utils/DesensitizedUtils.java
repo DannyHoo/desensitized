@@ -3,13 +3,11 @@ package com.danny.log.desensitized.utils;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.serializer.SerializerFeature;
 import com.danny.log.desensitized.annotation.Desensitized;
-import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 
-import java.lang.reflect.Array;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+
+import java.io.*;
+import java.lang.reflect.*;
 import java.util.*;
 
 /**
@@ -23,7 +21,154 @@ import java.util.*;
 public class DesensitizedUtils {
 
     /**
-     * 获取脱敏json串
+     * 拷贝对象方法
+     *
+     * @throws IllegalAccessException
+     * @throws InstantiationException
+     */
+    public static Object deepClone(Object objSource) throws InstantiationException, IllegalAccessException, InvocationTargetException, NoSuchMethodException {
+        if (null == objSource) return null;
+        //是否jdk类型、基础类型、枚举类型
+        if (isJDKType(objSource.getClass())
+                || objSource.getClass().isPrimitive()
+                || objSource instanceof Enum<?>) {
+            if ("java.lang.String".equals(objSource.getClass().getName())) {//目前只支持String类型深复制
+                return new String((String)objSource);
+            } else {
+                return objSource;
+            }
+        }
+        // 获取源对象类型
+        Class<?> clazz = objSource.getClass();
+        Object objDes = clazz.newInstance();
+        // 获得源对象所有属性
+        Field[] fields = getAllFields(objSource);
+        // 循环遍历字段，获取字段对应的属性值
+        for (Field field : fields) {
+            field.setAccessible(true);
+            if (null == field) continue;
+            Object value = field.get(objSource);
+            if (null == value) continue;
+            Class<?> type = value.getClass();
+            if (isStaticFinal(field)) {
+                continue;
+            }
+            try {
+
+                //遍历集合属性
+                if (type.isArray()) {//对数组类型的字段进行递归过滤
+                    int len = Array.getLength(value);
+                    if (len < 1) continue;
+                    Class<?> c = value.getClass().getComponentType();
+                    Array newArray = (Array) Array.newInstance(c, len);
+                    for (int i = 0; i < len; i++) {
+                        Object arrayObject = Array.get(value, i);
+                        Array.set(newArray, i, deepClone(arrayObject));
+                    }
+                } else if (value instanceof Collection<?>) {
+                    Collection newCollection = (Collection) value.getClass().newInstance();
+                    Collection<?> c = (Collection<?>) value;
+                    Iterator<?> it = c.iterator();
+                    while (it.hasNext()) {
+                        Object collectionObj = it.next();
+                        newCollection.add(deepClone(collectionObj));
+                    }
+                    field.set(objDes, newCollection);
+                    continue;
+                } else if (value instanceof Map<?, ?>) {
+                    Map newMap = (Map) value.getClass().newInstance();
+                    Map<?, ?> m = (Map<?, ?>) value;
+                    Set<?> set = m.entrySet();
+                    for (Object o : set) {
+                        Map.Entry<?, ?> entry = (Map.Entry<?, ?>) o;
+                        Object mapVal = entry.getValue();
+                        newMap.put(entry.getKey(), deepClone(mapVal));
+                    }
+                    field.set(objDes, newMap);
+                    continue;
+                }
+
+                //是否jdk类型或基础类型
+                if (isJDKType(field.get(objSource).getClass())
+                        || field.getClass().isPrimitive()
+                        || isStaticType(field)
+                        || value instanceof Enum<?>) {
+                    if ("java.lang.String".equals(value.getClass().getName())) {//目前只支持String类型深复制
+                        field.set(objDes, new String((String) value));
+                    } else {
+                        field.set(objDes, field.get(objSource));
+                    }
+                    continue;
+                }
+
+                //是否枚举
+                if (value.getClass().isEnum()) {
+                    field.set(objDes, field.get(objSource));
+                    continue;
+                }
+
+                //是否自定义类
+                if (isUserDefinedType(value.getClass())) {
+                    field.set(objDes, deepClone(value));
+                    continue;
+                }
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        return objDes;
+    }
+
+
+    /**
+     * 是否静态变量
+     *
+     * @param field
+     * @return
+     */
+    private static boolean isStaticType(Field field) {
+        return field.getModifiers() == 8 ? true : false;
+    }
+
+    private static boolean isStaticFinal(Field field) {
+        return Modifier.isFinal(field.getModifiers()) && Modifier.isStatic(field.getModifiers());
+    }
+
+    /**
+     * 是否jdk类型变量
+     *
+     * @param clazz
+     * @return
+     * @throws IllegalAccessException
+     */
+    private static boolean isJDKType(Class clazz) throws IllegalAccessException {
+        //Class clazz = field.get(objSource).getClass();
+        return StringUtils.startsWith(clazz.getPackage().getName(), "javax.")
+                || StringUtils.startsWith(clazz.getPackage().getName(), "java.")
+                || StringUtils.startsWith(clazz.getName(), "javax.")
+                || StringUtils.startsWith(clazz.getName(), "java.");
+    }
+
+
+    /**
+     * 是否用户自定义类型
+     *
+     * @param clazz
+     * @return
+     */
+    private static boolean isUserDefinedType(Class<?> clazz) {
+        return
+                clazz.getPackage() != null
+                        && !StringUtils.startsWith(clazz.getPackage().getName(), "javax.")
+                        && !StringUtils.startsWith(clazz.getPackage().getName(), "java.")
+                        && !StringUtils.startsWith(clazz.getName(), "javax.")
+                        && !StringUtils.startsWith(clazz.getName(), "java.");
+    }
+
+
+    /**
+     * 获取脱敏json串(递归引用会导致java.lang.StackOverflowError)
      *
      * @param javaBean
      * @return
@@ -34,13 +179,16 @@ public class DesensitizedUtils {
             try {
                 if (javaBean.getClass().isInterface()) return json;
                 /* 克隆出一个实体进行字段修改，避免修改原实体 */
-                Object clone = copy(javaBean);
+                Object clone0 = deepClone(javaBean);
+                //Object clone1 =deepCloneObject(javaBean);
+                String tempJson = JSON.toJSONString(javaBean);
+                Object clone = JSON.parseObject(tempJson, javaBean.getClass());
                 /* 定义一个计数器，用于避免重复循环自定义对象类型的字段 */
                 Set<Integer> referenceCounter = new HashSet<Integer>();
                 /* 对克隆实体进行脱敏操作 */
-                DesensitizedUtils.replace(getAllFields(clone), clone, referenceCounter);
+                DesensitizedUtils.replace(getAllFields(clone0), clone0, referenceCounter);
                 /* 利用fastjson对脱敏后的克隆对象进行序列化 */
-                json = JSON.toJSONString(clone, SerializerFeature.WriteMapNullValue, SerializerFeature.WriteNullListAsEmpty);
+                json = JSON.toJSONString(clone0, SerializerFeature.WriteMapNullValue, SerializerFeature.WriteNullListAsEmpty);
                 /* 清空计数器 */
                 referenceCounter.clear();
                 referenceCounter = null;
@@ -49,6 +197,34 @@ public class DesensitizedUtils {
             }
         }
         return json;
+    }
+
+
+    /**
+     * 深度拷贝
+     * 被拷贝的对象必须要实现序列化
+     *
+     * @param obj
+     * @return
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T deepCloneObject(T obj) {
+        T t = (T) new Object();
+        try {
+            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+            ObjectOutputStream out = new ObjectOutputStream(byteOut);
+            out.writeObject(obj);
+            out.close();
+            ByteArrayInputStream byteIn = new ByteArrayInputStream(byteOut.toByteArray());
+            ObjectInputStream in = new ObjectInputStream(byteIn);
+            t = (T) in.readObject();
+            in.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+        return t;
     }
 
     private static void replace(Field[] fields, Object javaBean, Set<Integer> referenceCounter) throws IllegalArgumentException, IllegalAccessException {
@@ -64,14 +240,18 @@ public class DesensitizedUtils {
                             int len = Array.getLength(value);
                             for (int i = 0; i < len; i++) {
                                 Object arrayObject = Array.get(value, i);
-                                DesensitizedUtils.replace(getAllFields(arrayObject), arrayObject, referenceCounter);
+                                if (isNotGeneralType(arrayObject.getClass(), arrayObject, referenceCounter)) {
+                                    replace(getAllFields(arrayObject), arrayObject, referenceCounter);
+                                }
                             }
                         } else if (value instanceof Collection<?>) {//对集合类型的字段进行递归过滤
                             Collection<?> c = (Collection<?>) value;
                             Iterator<?> it = c.iterator();
-                            while (it.hasNext()) {
+                            while (it.hasNext()) {// TODO: 17/7/10 待优化
                                 Object collectionObj = it.next();
-                                DesensitizedUtils.replace(getAllFields(collectionObj), collectionObj, referenceCounter);
+                                if (isNotGeneralType(collectionObj.getClass(), collectionObj, referenceCounter)) {
+                                    replace(getAllFields(collectionObj), collectionObj, referenceCounter);
+                                }
                             }
                         } else if (value instanceof Map<?, ?>) {//对Map类型的字段进行递归过滤
                             Map<?, ?> m = (Map<?, ?>) value;
@@ -79,19 +259,25 @@ public class DesensitizedUtils {
                             for (Object o : set) {
                                 Map.Entry<?, ?> entry = (Map.Entry<?, ?>) o;
                                 Object mapVal = entry.getValue();
-                                DesensitizedUtils.replace(getAllFields(mapVal), mapVal, referenceCounter);
+                                if (isNotGeneralType(mapVal.getClass(), mapVal, referenceCounter)) {
+                                    replace(getAllFields(mapVal), mapVal, referenceCounter);
+                                }
                             }
                         } else if (value instanceof Enum<?>) {
                             continue;
                         }
+
                         /*除基础类型、jdk类型的字段之外，对其他类型的字段进行递归过滤*/
-                        else if (!type.isPrimitive()
-                                && !StringUtils.startsWith(type.getPackage().getName(), "javax.")
-                                && !StringUtils.startsWith(type.getPackage().getName(), "java.")
-                                && !StringUtils.startsWith(field.getType().getName(), "javax.")
-                                && !StringUtils.startsWith(field.getName(), "java.")
-                                && referenceCounter.add(value.hashCode())) {
-                            DesensitizedUtils.replace(getAllFields(value), value, referenceCounter);
+                        else {
+                            if (!type.isPrimitive()
+                                    && type.getPackage() != null
+                                    && !StringUtils.startsWith(type.getPackage().getName(), "javax.")
+                                    && !StringUtils.startsWith(type.getPackage().getName(), "java.")
+                                    && !StringUtils.startsWith(field.getType().getName(), "javax.")
+                                    && !StringUtils.startsWith(field.getName(), "java.")
+                                    && referenceCounter.add(value.hashCode())) {
+                                replace(getAllFields(value), value, referenceCounter);
+                            }
                         }
                     }
 
@@ -104,12 +290,32 @@ public class DesensitizedUtils {
     }
 
     /**
+     * 排除基础类型、jdk类型、枚举类型的字段
+     *
+     * @param clazz
+     * @param value
+     * @param referenceCounter
+     * @return
+     */
+    private static boolean isNotGeneralType(Class<?> clazz, Object value, Set<Integer> referenceCounter) {
+        return !clazz.isPrimitive()
+                && clazz.getPackage() != null
+                && !clazz.isEnum()
+                && !StringUtils.startsWith(clazz.getPackage().getName(), "javax.")
+                && !StringUtils.startsWith(clazz.getPackage().getName(), "java.")
+                && !StringUtils.startsWith(clazz.getName(), "javax.")
+                && !StringUtils.startsWith(clazz.getName(), "java.")
+                && referenceCounter.add(value.hashCode());
+    }
+
+    /**
      * 拷贝对象方法
      *
      * @throws IllegalAccessException
      * @throws InstantiationException
      */
-    public static Object copy(Object objSource) throws InstantiationException, IllegalAccessException {
+    public static Object copy(Object objSource) throws InstantiationException, IllegalAccessException, InvocationTargetException, NoSuchMethodException {
+
 
         if (null == objSource) return null;
         // 获取源对象类型
@@ -136,6 +342,7 @@ public class DesensitizedUtils {
 
     /**
      * 获取包括父类所有的属性
+     *
      * @param objSource
      * @return
      */
@@ -147,11 +354,10 @@ public class DesensitizedUtils {
             fieldList.addAll(Arrays.asList(tempClass.getDeclaredFields()));
             tempClass = tempClass.getSuperclass(); //得到父类,然后赋给自己
         }
-        Field[] fields =new Field[fieldList.size()];
+        Field[] fields = new Field[fieldList.size()];
         fieldList.toArray(fields);
         return fields;
     }
-
 
 
     /**

@@ -5,6 +5,8 @@ import com.danny.log.desensitized.enums.SensitiveTypeEnum;
 
 import java.math.BigDecimal;
 import java.util.Date;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author huyuyang@lxfintech.com
@@ -15,6 +17,11 @@ import java.util.Date;
  * @Created on 2017-06-07 15:19:23
  */
 public class BaseUserInfo extends BaseEntity{
+    private List<Map> mapList;
+    private List<String> strList;
+    private Map<String,UserTypeEnum> map;
+    private List<UserService> userServiceList;
+    private ILimitKey iLimitKey;
 
     private UserTypeEnum userType;
 
@@ -162,6 +169,55 @@ public class BaseUserInfo extends BaseEntity{
     public BaseUserInfo setExtend4(Date extend4) {
         this.extend4 = extend4;
         return this;
+    }
+
+
+    public List<String> getStrList() {
+        return strList;
+    }
+
+    public BaseUserInfo setStrList(List<String> strList) {
+        this.strList = strList;
+        return this;
+    }
+
+    public Map<String, UserTypeEnum> getMap() {
+        return map;
+    }
+
+    public BaseUserInfo setMap(Map<String, UserTypeEnum> map) {
+        this.map = map;
+        return this;
+    }
+    public ILimitKey getiLimitKey() {
+        return iLimitKey;
+    }
+
+    public BaseUserInfo setiLimitKey(ILimitKey iLimitKey) {
+        this.iLimitKey = iLimitKey;
+        return this;
+    }
+
+    public List<UserService> getUserServiceList() {
+        return userServiceList;
+    }
+
+    public BaseUserInfo setUserServiceList(List<UserService> userServiceList) {
+        this.userServiceList = userServiceList;
+        return this;
+    }
+
+    public List<Map> getMapList() {
+        return mapList;
+    }
+
+    public BaseUserInfo setMapList(List<Map> mapList) {
+        this.mapList = mapList;
+        return this;
+    }
+
+    public static long getSerialVersionUID() {
+        return serialVersionUID;
     }
 
     /**
