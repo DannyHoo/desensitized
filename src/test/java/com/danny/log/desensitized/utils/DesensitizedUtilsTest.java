@@ -1,15 +1,9 @@
 package com.danny.log.desensitized.utils;
 
 import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.serializer.SerializerFeature;
-import com.danny.log.desensitized.DeepCloneUtil;
 import com.danny.log.desensitized.entity.*;
 import org.junit.Test;
-
-import org.apache.commons.beanutils.PropertyUtils;
-import org.apache.commons.beanutils.BeanUtils;
-import net.sf.cglib.beans.BeanCopier;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.*;
@@ -33,10 +27,6 @@ public class DesensitizedUtilsTest {
      */
     @Test
     public void testUserInfo() throws IllegalAccessException, InstantiationException, InvocationTargetException, NoSuchMethodException {
-
-        Integer i1=1222;
-        Integer i2=1222;
-        boolean e=i1.equals(i2);
 
         List<String> stringList = new ArrayList<String>();
         stringList.add("danny");
@@ -81,10 +71,9 @@ public class DesensitizedUtilsTest {
                 .setUserPackageName("UserPackageName_Danny");
 
 
-        //System.out.println("脱敏前：" + JSON.toJSONString(baseUserInfo, SerializerFeature.WriteMapNullValue, SerializerFeature.WriteNullListAsEmpty));
+        System.out.println("脱敏前：" + JSON.toJSONString(baseUserInfo));
         System.out.println("脱敏后：" + DesensitizedUtils.getJson(baseUserInfo));
-        System.out.println("脱敏后：" + DesensitizedUtils.getJson(userPackage));
-        System.out.println("原对象：" + JSON.toJSONString(baseUserInfo));
+        System.out.println("嵌套实体脱敏后：" + DesensitizedUtils.getJson(userPackage));
 
     }
 
