@@ -5,8 +5,6 @@ import com.alibaba.fastjson.serializer.SerializerFeature;
 import com.danny.log.desensitized.annotation.Desensitized;
 import org.apache.commons.lang3.StringUtils;
 
-
-import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
 
@@ -55,6 +53,15 @@ public class DesensitizedUtils {
         return json;
     }
 
+    /**
+     * 对需要脱敏的字段进行转化
+     *
+     * @param fields
+     * @param javaBean
+     * @param referenceCounter
+     * @throws IllegalArgumentException
+     * @throws IllegalAccessException
+     */
     private static void replace(Field[] fields, Object javaBean, Set<Integer> referenceCounter) throws IllegalArgumentException, IllegalAccessException {
         if (null != fields && fields.length > 0) {
             for (Field field : fields) {
