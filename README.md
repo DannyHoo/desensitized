@@ -2,7 +2,7 @@
 
 
 
-###项目说明
+### 项目说明
 
 目前项目核心代码只有3个包：annotation、enums、utils
 
@@ -25,11 +25,11 @@ com.danny.log.desensitized
 
 4、DesensitizedUtils对字段脱敏的核心逻辑
 
-###使用方法：
+### 使用方法：
 
 详见test包下的com.danny.log.desensitized.utils.DesensitizedUtilsTest类
 
-###博客链接：
+### 博客链接：
 数据脱敏——什么是数据脱敏：http://blog.csdn.net/huyuyang6688/article/details/77689459
 
 数据脱敏——基于自定义注解实现日志脱敏 http://blog.csdn.net/huyuyang6688/article/details/77759844
