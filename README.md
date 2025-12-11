@@ -33,3 +33,9 @@ com.danny.log.desensitized
 数据脱敏——什么是数据脱敏：http://blog.csdn.net/huyuyang6688/article/details/77689459
 
 数据脱敏——基于自定义注解实现日志脱敏 http://blog.csdn.net/huyuyang6688/article/details/77759844
+
+<hr>
+
+### 欢迎扫码交流学习
+
+![丹尼编程](https://youke2.picui.cn/s1/2025/12/10/6938e1d0be99a.jpeg)
